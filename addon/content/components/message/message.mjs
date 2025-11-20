@@ -415,6 +415,45 @@ export class Message extends React.PureComponent {
             tags: this.props.message.tags,
           }),
         this.props.message.expanded &&
+          this.props.message.qnote &&
+          React.createElement(
+            "div",
+            {
+              className: "qnote-container",
+              style: {
+                backgroundColor: "#fffacd",
+                border: "1px solid #e6db74",
+                borderRadius: "4px",
+                padding: "8px 12px",
+                margin: "8px 0",
+                fontSize: "13px",
+                color: "#333",
+              },
+            },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  fontWeight: "bold",
+                  marginBottom: "4px",
+                  fontSize: "12px",
+                  color: "#666",
+                },
+              },
+              "Note:"
+            ),
+            React.createElement(
+              "div",
+              {
+                style: {
+                  whiteSpace: "pre-wrap",
+                  wordWrap: "break-word",
+                },
+              },
+              this.props.message.qnote
+            )
+          ),
+        this.props.message.expanded &&
           this.props.message.printBody &&
           React.createElement(
             "div",

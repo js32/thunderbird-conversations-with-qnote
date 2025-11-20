@@ -144,6 +144,7 @@ declare namespace browser {
     export function setCorePref(name: string, value: any): Promise<void>;
     export function getMessageIdForUri(uri: string): Promise<number>;
     export function getMessageUriForId(id: number): Promise<string>;
+    export function getQNoteForMessage(id: number): Promise<string | null>;
     interface createTabProperties {
       url: string;
       type: string;

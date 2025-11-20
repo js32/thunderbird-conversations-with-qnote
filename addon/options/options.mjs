@@ -124,6 +124,14 @@ const PREFS_INFO = [
     },
     component: "binary-option",
   },
+  {
+    props: {
+      title: "QNote Folder Path",
+      desc: "Path to the folder where QNote stores notes (e.g., /Users/username/qnote)",
+      name: "qnote_folder",
+    },
+    component: "text-option",
+  },
 ];
 
 /**
@@ -292,6 +300,83 @@ export class NumericOption extends OptionBase {
   }
 }
 customElements.define("numeric-option", NumericOption);
+
+/**
+ * Options class to support text input options.
+ */
+export class TextOption extends OptionBase {
+  static get fragment() {
+    if (!this._template) {
+      let parser = new DOMParser();
+      let doc = parser.parseFromString(
+        `
+        <template>
+          <link rel="stylesheet" href="options.css" />
+          <link rel="stylesheet" href="../common.css" type="text/css" />
+          <div class="descriptionWrapper">
+            <label class="title"></label>
+            <br>
+            <label class="desc"></label>
+          </div>
+          <div class="inputWrapper">
+            <input type="text" class="pref" style="width: 100%; min-width: 300px;">
+          </div>
+        </template>
+        `,
+        "text/html"
+      );
+      this._template = document.importNode(doc.querySelector("template"), true);
+    }
+    return this._template.content.cloneNode(true);
+  }
+
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.appendChild(TextOption.fragment);
+  }
+
+  /**
+   * @param {OptionProperties} properties
+   * @param {any} initialValue
+   */
+  setProps(properties, initialValue) {
+    let title = /** @type {HTMLLabelElement} */ (
+      this.shadowRoot.querySelector(".title")
+    );
+    title.innerText = properties.title;
+    title.htmlFor = properties.name;
+    /** @type {HTMLLabelElement} */ (
+      this.shadowRoot.querySelector(".desc")
+    ).innerText = properties.desc;
+    let input = this.shadowRoot.querySelector("input");
+    input.id = properties.name;
+    input.value = initialValue || "";
+    input.addEventListener("change", this.onChange.bind(this));
+    input.addEventListener("blur", this.onChange.bind(this));
+  }
+
+  async onChange(event) {
+    const value = event.target.value.trim();
+    const prefName = event.target.id;
+
+    try {
+      await this.savePref(prefName, value);
+
+      // Special handling for qnote_folder: also save to Services.prefs
+      if (prefName === "qnote_folder" && value) {
+        await browser.conversations.setCorePref(
+          "extensions.thunderbirdconversations.qnote_folder",
+          value
+        );
+        console.log(`QNote: Saved path to core prefs: ${value}`);
+      }
+    } catch (error) {
+      console.error("Error saving preference:", error);
+    }
+  }
+}
+customElements.define("text-option", TextOption);
 
 /**
  * Options class to support binary options.

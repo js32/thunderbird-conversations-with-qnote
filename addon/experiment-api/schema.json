@@ -60,6 +60,24 @@
         ]
       },
       {
+        "name": "getQNoteForMessage",
+        "type": "function",
+        "description": "Gets the QNote note text for a message if the QNote addon is installed",
+        "async": true,
+        "parameters": [
+          {
+            "name": "id",
+            "type": "integer",
+            "description": "The messageId"
+          }
+        ],
+        "returns": {
+          "type": "string",
+          "optional": true,
+          "description": "The note text, or null if no note exists or QNote is not installed"
+        }
+      },
+      {
         "name": "createTab",
         "type": "function",
         "description": "Temporary. Creates a content or chrome tab. What we'll need to replace with depends on Message Attachments API, Bug 1696764",
