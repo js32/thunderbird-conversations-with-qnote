@@ -1,0 +1,103 @@
+# QNote Integration for Thunderbird Conversations
+
+This document describes how to enable QNote integration in Thunderbird Conversations so that notes from the QNote addon are displayed directly in the conversation view.
+
+## Prerequisites
+
+- QNote addon must be installed and configured to use folder-based storage
+- QNote must be storing notes in a filesystem folder (not internal storage)
+
+## Setup
+
+### Step 1: Configure QNote to use folder storage
+
+1. Open QNote settings
+2. Select "Folder" as storage option (not "Internal storage")
+3. Choose or note the folder path where QNote stores notes
+
+### Step 2: Configure Thunderbird Conversations
+
+1. Open Thunderbird
+2. Go to Settings → General → Config Editor (at the bottom)
+3. Click "I accept the risk!"
+4. Search for: `extensions.thunderbirdconversations.qnote_folder`
+5. If it doesn't exist, click "String" and "+" to create it
+6. Set the value to your QNote storage folder path
+
+   Example: `/Users/play/syncthing/7L-GF/_qnote`
+
+7. Restart Thunderbird
+
+## How it works
+
+Once configured, Thunderbird Conversations will:
+
+1. Read the folder path from the preference `extensions.thunderbirdconversations.qnote_folder`
+2. For each message in a conversation, look for a file named `<message-id>.qnote` in that folder
+3. Parse the JSON file and extract the note text
+4. Display the note in a yellow box between the message tags and the message body
+
+## QNote file format
+
+QNote stores notes as JSON files with the following structure:
+
+```json
+{
+  "text": "The actual note text",
+  "height": 500,
+  "left": 706,
+  "top": 302,
+  "width": 500,
+  "ts": 1752055830795
+}
+```
+
+The filename is the URL-encoded message ID with `.qnote` extension.
+Example: `10aa54c6-7007-4c5f-9cb4-d2e46eebfb44%40fk.siebenlinden.org.qnote`
+
+## Troubleshooting
+
+- **Notes not showing up**: Check that:
+  - The folder path is correct
+  - QNote is using folder storage (not internal storage)
+  - The .qnote files exist in the configured folder
+  - You've restarted Thunderbird after setting the preference
+
+- **Check the Browser Console** (Ctrl+Shift+J) for debug messages starting with "QNote integration:"
+
+## Technical Details
+
+### Implementation
+
+The integration works by:
+
+1. **API Method** (`addon/experiment-api/api.js:247`): `getQNoteForMessage(messageId)`
+   - Reads the folder path from preferences
+   - Constructs the filename using URL-encoded message ID
+   - Reads and parses the JSON file
+   - Returns the note text
+
+2. **Message Enrichment** (`addon/content/reducer/messageEnricher.mjs:534`)
+   - Calls `getQNoteForMessage()` during message enrichment
+   - Stores the note text in `msg.qnote`
+
+3. **UI Display** (`addon/content/components/message/message.mjs:417`)
+   - Renders notes in a yellow box if `message.qnote` is present
+   - Styled with light yellow background (#fffacd)
+   - Positioned between message tags and message body
+
+### Preference Fallback
+
+The system tries to read the folder path in this order:
+
+1. `extensions.qnote.folder` (QNote's own preference, if exposed)
+2. `extensions.thunderbirdconversations.qnote_folder` (our custom preference)
+
+## Future Enhancements
+
+Potential improvements:
+
+- Add UI in Thunderbird Conversations options to set the folder path
+- Auto-detect QNote's folder path from QNote's settings
+- Support for editing notes directly from the conversation view
+- Icon/indicator showing which messages have notes

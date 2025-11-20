@@ -1,13 +1,13 @@
 {
-  "version": "4.3.5",
-  "description": "Thunderbird Conversations",
+  "version": "4.3.5-qnote",
+  "description": "Thunderbird Conversations with QNote Integration",
   "note(description)": "This file is for build purposes only",
   "repository": {
     "type": "git",
-    "url": "git@github.com:thunderbird-conversations/thunderbird-conversations.git"
+    "url": "git@github.com:yourname/thunderbird-conversations-qnote.git"
   },
   "bugs": {
-    "url": "https://github.com/thunderbird-conversations/thunderbird-conversations/issues"
+    "url": "https://github.com/yourname/thunderbird-conversations-qnote/issues"
   },
   "engines": {
     "thunderbird": ">=128.0a1"

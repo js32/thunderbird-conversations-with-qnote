@@ -2,17 +2,17 @@
   "manifest_version": 2,
   "applications": {
     "gecko": {
-      "id": "gconversation@xulforum.org",
+      "id": "conversations-qnote@yourname.org",
       "strict_min_version": "140.0a1",
       "strict_max_version": "146.0a1"
     }
   },
-  "author": "Jonathan Protzenko",
-  "name": "__MSG_extensionName__",
+  "author": "Your Name",
+  "name": "Thunderbird Conversations with QNote",
   "default_locale": "en",
-  "description": "__MSG_extensionDescription__",
-  "version": "4.3.5",
-  "homepage_url": "http://github.com/thunderbird-conversations/thunderbird-conversations/wiki",
+  "description": "Thunderbird Conversations with integrated QNote support",
+  "version": "4.3.5-qnote",
+  "homepage_url": "https://github.com/yourname/thunderbird-conversations-qnote",
   "background": {
     "scripts": ["background/background.mjs"],
     "type": "module"

@@ -38,6 +38,7 @@ const kSnippetLength = 700;
  * @property {boolean} [isInbox]
  * @property {boolean} [isJunk]
  * @property {boolean} [isSent]
+ * @property {string} [qnote]
  * @property {boolean} [isTemplate]
  * @property {boolean} [isOutbox]
  * @property {boolean} [read]
@@ -102,6 +103,29 @@ export class MessageEnricher {
               summary.prefs.extraAttachments
             );
           }
+
+          // Try to get QNote data if available (for ALL messages)
+          try {
+            console.log(
+              "QNote: Attempting to get note for message ID:",
+              message.id
+            );
+            const qnoteText = await browser.conversations.getQNoteForMessage(
+              message.id
+            );
+            console.log(
+              "QNote: Got result:",
+              qnoteText ? "Note found" : "No note"
+            );
+            if (qnoteText) {
+              msg.qnote = qnoteText;
+              console.log("QNote: Set msg.qnote to:", qnoteText);
+            }
+          } catch (e) {
+            // QNote not available or not installed, silently continue
+            console.error("QNote: Error in messageEnricher:", e);
+          }
+
           this._adjustSnippetForBugzilla(message, msg);
           await this._setDates(msg, summary);
         } catch (ex) {
