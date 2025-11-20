@@ -225,6 +225,10 @@ var conversations = class extends ExtensionCommon.ExtensionAPI {
               case "mailnews.default_view_flags":
                 Services.prefs.setIntPref(name, value);
                 break;
+              case "extensions.thunderbirdconversations.qnote_folder":
+                Services.prefs.setStringPref(name, value);
+                console.log(`Set qnote_folder pref to: ${value}`);
+                break;
             }
           } catch (ex) {
             console.error(ex);
@@ -243,6 +247,146 @@ var conversations = class extends ExtensionCommon.ExtensionAPI {
             return null;
           }
           return msgHdr.folder.getUriForMsg(msgHdr);
+        },
+        async getQNoteForMessage(id) {
+          console.log("QNote API: getQNoteForMessage called with id:", id);
+          try {
+            const msgHdr = context.extension.messageManager.get(id);
+            if (!msgHdr) {
+              console.log("QNote API: No msgHdr found for id:", id);
+              return null;
+            }
+
+            // Check if QNote addon is installed and provides an API
+            const headerMessageId = msgHdr.messageId;
+            console.log("QNote API: headerMessageId:", headerMessageId);
+            if (!headerMessageId) {
+              console.log("QNote API: No headerMessageId");
+              return null;
+            }
+
+            // Try to read QNote from filesystem
+            // QNote stores notes as JSON files: <headerMessageId>.qnote
+            try {
+              // Try to get the qnote storage folder path from preferences
+              let qnotePath = null;
+
+              // Try to read from Thunderbird Conversations preference
+              try {
+                qnotePath = Services.prefs.getStringPref(
+                  "extensions.thunderbirdconversations.qnote_folder"
+                );
+                console.log(`QNote: Found path in preferences: ${qnotePath}`);
+              } catch (e) {
+                // Preference not set
+              }
+
+              // If no preference found, try to read from qnote's own preferences
+              if (!qnotePath) {
+                try {
+                  const prefBranch =
+                    Services.prefs.getBranch("extensions.qnote.");
+                  if (prefBranch.prefHasUserValue("folder")) {
+                    qnotePath = prefBranch.getStringPref("folder");
+                    console.log(
+                      `QNote: Found path in qnote preferences: ${qnotePath}`
+                    );
+                  }
+                } catch (e) {
+                  console.debug("QNote: No qnote preferences found", e);
+                }
+              }
+
+              if (!qnotePath) {
+                console.log(
+                  "QNote: No folder path configured. Please set qnote_folder in preferences."
+                );
+                return null;
+              }
+
+              console.log(
+                `QNote: Looking for note for message ID: ${headerMessageId}`
+              );
+
+              // Construct the file path
+              const file = Cc["@mozilla.org/file/local;1"].createInstance(
+                Ci.nsIFile
+              );
+              file.initWithPath(qnotePath);
+
+              // Append the filename: <headerMessageId>.qnote
+              // URL encode the message ID to match qnote's file naming
+              const filename = encodeURIComponent(headerMessageId) + ".qnote";
+              file.append(filename);
+
+              const fullPath = file.path;
+              console.log(`QNote: Checking for file: ${fullPath}`);
+
+              if (!file.exists()) {
+                console.log(`QNote: File does not exist: ${fullPath}`);
+                return null;
+              }
+
+              if (!file.isFile()) {
+                console.log(
+                  `QNote: Path exists but is not a file: ${fullPath}`
+                );
+                return null;
+              }
+
+              console.log(`QNote: File exists, reading: ${fullPath}`);
+
+              // Read the file
+              const data = await new Promise((resolve, reject) => {
+                lazy.NetUtil.asyncFetch(
+                  {
+                    uri: Services.io.newFileURI(file),
+                    loadUsingSystemPrincipal: true,
+                  },
+                  (inputStream, status) => {
+                    if (!Components.isSuccessCode(status)) {
+                      console.error(
+                        `QNote: Failed to read file, status: ${status}`
+                      );
+                      resolve(null);
+                      return;
+                    }
+
+                    try {
+                      const text = lazy.NetUtil.readInputStreamToString(
+                        inputStream,
+                        inputStream.available()
+                      );
+
+                      console.log(`QNote: Read ${text.length} bytes from file`);
+                      const noteData = JSON.parse(text);
+                      console.log(
+                        `QNote: Parsed note text: "${noteData.text}"`
+                      );
+                      resolve(noteData.text || null);
+                    } catch (e) {
+                      console.error("QNote: Failed to parse JSON:", e);
+                      resolve(null);
+                    }
+                  }
+                );
+              });
+
+              if (data) {
+                console.log(`QNote: Returning note data for message ${id}`);
+                return data;
+              } else {
+                console.log(`QNote: No note data found for message ${id}`);
+              }
+            } catch (e) {
+              console.error("QNote: Error reading from filesystem:", e);
+            }
+
+            return null;
+          } catch (e) {
+            console.error("Error getting QNote for message:", e);
+            return null;
+          }
         },
         async createTab(createTabProperties) {
           const params = {
