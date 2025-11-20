@@ -1,35 +1,60 @@
-# Thunderbird Conversations
+# Thunderbird Conversations with QNote Integration
 
-This extension improves the threaded summary for emails in Thunderbird. It
-vastly improves the UI by including some ideas from GMail. More specifically:
+This is a fork of [Thunderbird Conversations](https://github.com/thunderbird-conversations/thunderbird-conversations) with integrated [QNote](https://github.com/mlazdans/qnote) support.
 
-- your own messages are displayed in the thread,
-- you initially see summaries, they can be expanded to display full messages,
-- quoted sections are collapsed à la GMail,
-- fast links for replying (and possibly other useful actions),
-- you can reply inline (through a "quick reply" feature).
+## What's Different?
 
-For screenshots and a stable version, please head to
-[AMO](https://addons.thunderbird.net/thunderbird/addon/gmail-conversation-view/) which should
-provide you with a ready-to-install package.
+This version adds QNote integration, allowing you to see your QNote notes directly in the conversation view.
 
-# Thunderbird support
+## Features
 
-We try to ensure the released version of Conversations supports at least the
-latest released Thunderbird version.
+- All features from the original Thunderbird Conversations
+- **NEW**: Display QNote notes in conversation view
+- **NEW**: Notes appear in a yellow box between message tags and message body
+- **NEW**: Easy configuration via preferences
 
-Where possible, we also support the previous Thunderbird version, and the latest
-Beta's. However, sometimes support may lag, depending on what changes have
-recently been made in Thunderbird.
+## Installation
 
-# Building, Development and Testing
+1. Download the latest `conversations.xpi` from releases
+2. Install in Thunderbird via Add-ons → Install Add-on From File
+3. Configure the QNote folder path in preferences
 
-Please see [Development.md](docs/Development.md) for details.
+## Configuration
 
-# Contributing
+1. Open Thunderbird Conversations preferences
+2. Scroll down to "QNote Folder Path"
+3. Enter the path where QNote stores notes (e.g., `/Users/username/qnote`)
+4. Restart Thunderbird
 
-Please see [CONTRIBUTING.md](CONTRIBUTING.md).
+## How It Works
 
-# License
+QNote stores notes as JSON files named `<message-id>.qnote`. This addon:
 
-Please see [LICENSE](LICENSE).
+1. Reads the QNote folder path from preferences
+2. For each message, looks for a corresponding `.qnote` file
+3. Parses the JSON and extracts the note text
+4. Displays the note in a highlighted box in the conversation view
+
+## Requirements
+
+- Thunderbird 140+
+- QNote addon configured to use folder-based storage
+
+## Building
+
+```bash
+npm ci
+npm run build
+```
+
+The built addon will be in `dist/` and `conversations.xpi`.
+
+## Credits
+
+- Original Thunderbird Conversations by Jonathan Protzenko and contributors
+- QNote integration added by [Your Name]
+- QNote addon by mlazdans
+
+## License
+
+MPL-2.0 (same as original Thunderbird Conversations)
