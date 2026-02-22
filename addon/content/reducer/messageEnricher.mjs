@@ -83,6 +83,8 @@ export class MessageEnricher {
     const userTags = await browser.messages.tags.list();
 
     const folderNameCache = new Map(); // folder.id -> Promise<string>
+    // Start tab info fetch once for all messages (same tabId throughout)
+    const tabInfoPromise = browser.mailTabs.get(summary.tabId).catch(() => null);
 
     let msgs = await Promise.all(
       msgData.map(async (message) => {
@@ -90,11 +92,11 @@ export class MessageEnricher {
         let msg = {};
         try {
           msg = await this._addDetailsFromHeader(
-            summary.tabId,
             message,
             userTags,
             selectedMessages,
-            folderNameCache
+            folderNameCache,
+            tabInfoPromise
           );
 
           await Promise.all([
@@ -356,8 +358,10 @@ export class MessageEnricher {
    *   An array of the currently selected messages.
    * @param {Map} folderNameCache
    *   A cache of folder id to resolved folder name promises.
+   * @param {Promise} tabInfoPromise
+   *   A shared promise resolving to the current mail tab (or null).
    */
-  async _addDetailsFromHeader(tabId, message, userTags, selectedMessages, folderNameCache) {
+  async _addDetailsFromHeader(message, userTags, selectedMessages, folderNameCache, tabInfoPromise) {
     // TODO: Maybe only clone msg & start using more fields directly.
     /** @type {FullMessageDetails} */
     let msg = {
@@ -427,14 +431,11 @@ export class MessageEnricher {
     // Only need to do this if the message is not in the current view.
     msg.inView = selectedMessages.some((id) => id == message.id);
     if (!msg.inView) {
-      try {
-        let currentTab = await browser.mailTabs.get(tabId);
+      const currentTab = await tabInfoPromise;
+      if (currentTab) {
         msg.inView =
           currentTab.displayedFolder.accountId == message.folder.accountId &&
           currentTab.displayedFolder.path == message.folder.path;
-      } catch {
-        // If we can't get the current tab, we assume the message is not in
-        // the current view, e.g. standalone tab.
       }
     }
 
@@ -467,7 +468,16 @@ export class MessageEnricher {
    *   The new message to put the details into.
    */
   async _getFullDetails(message, msg) {
-    const fullMsg = await browser.messages.getFull(message.id);
+    // Fetch full message content and late attachments in parallel
+    const [fullMsg, lateAttachments] = await Promise.all([
+      browser.messages.getFull(message.id),
+      // TODO: Attachment display currently relies on having the URI for the
+      // preview of the attachment. Since listAttachments doesn't give us that,
+      // then we use getLateAttachments for now. If we can delay load the image
+      // and insert it later, that'd probably be good enough.
+      browser.conversations.getLateAttachments(message.id, false),
+    ]);
+
     if (
       "list-post" in fullMsg.headers &&
       RE_LIST_POST.exec(fullMsg.headers["list-post"].toString())
@@ -475,18 +485,26 @@ export class MessageEnricher {
       msg.recipientsIncludeLists = true;
     }
 
-    if ("x-bugzilla-who" in fullMsg.headers) {
-      msg.realFrom = msg.parsedLines.from[0]?.email;
-      msg.parsedLines.from =
-        await browser.messengerUtilities.parseMailboxString(
-          fullMsg.headers["x-bugzilla-who"][0]
-        );
-    }
+    // Parse bugzilla-who and reply-to headers in parallel
+    const [bugzillaFrom, replyTo] = await Promise.all([
+      "x-bugzilla-who" in fullMsg.headers
+        ? browser.messengerUtilities.parseMailboxString(
+            fullMsg.headers["x-bugzilla-who"][0]
+          )
+        : Promise.resolve(null),
+      "reply-to" in fullMsg.headers
+        ? browser.messengerUtilities.parseMailboxString(
+            fullMsg.headers["reply-to"][0]
+          )
+        : Promise.resolve(null),
+    ]);
 
-    if ("reply-to" in fullMsg.headers) {
-      msg.replyTo = await browser.messengerUtilities.parseMailboxString(
-        fullMsg.headers["reply-to"][0]
-      );
+    if (bugzillaFrom) {
+      msg.realFrom = msg.parsedLines.from[0]?.email;
+      msg.parsedLines.from = bugzillaFrom;
+    }
+    if (replyTo) {
+      msg.replyTo = replyTo;
     }
 
     function checkPart(msgPart) {
@@ -518,40 +536,19 @@ export class MessageEnricher {
     }
 
     let info = checkPart(fullMsg.parts[0]);
-    if (info.html && info.body) {
-      msg.snippet = await browser.messengerUtilities.convertToPlainText(
-        info.body
-      );
-    } else {
-      msg.snippet = info.body ?? "";
-    }
 
-    msg.snippet = msg.snippet.substring(0, kSnippetLength);
+    // Run snippet conversion and attachment processing in parallel
+    const [snippet] = await Promise.all([
+      info.html && info.body
+        ? browser.messengerUtilities.convertToPlainText(info.body)
+        : Promise.resolve(info.body ?? ""),
+      this._addDetailsFromAttachments(
+        { attachments: lateAttachments, initialPosition: message.initialPosition },
+        msg
+      ),
+    ]);
 
-    // TODO: Attachment display currently relies on having the URI for the
-    // preview of the attachment. Since listAttachments doesn't give us that,
-    // then we use getLateAttachments for now. If we can delay load the image
-    // and insert it later, that'd probably be good enough.
-    // let attachments = await browser.messages.listAttachments(message.id);
-    // message.attachments = attachments.map((a) => {
-    //   return {
-    //     contentType: a.contentType,
-    //     name: a.name,
-    //     partName: a.partName,
-    //     size: a.size,
-    //   };
-    // });
-
-    await this._addDetailsFromAttachments(
-      {
-        attachments: await browser.conversations.getLateAttachments(
-          message.id,
-          false
-        ),
-        initialPosition: message.initialPosition,
-      },
-      msg
-    );
+    msg.snippet = snippet.substring(0, kSnippetLength);
   }
 
   /**
