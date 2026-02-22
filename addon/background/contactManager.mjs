@@ -300,37 +300,40 @@ export class ContactManager {
    * Currently there is no refresh when account changes are made - Thunderbird
    * will need to be restart.
    */
-  async _getIdentityEmails() {
-    if (this._identityEmails) {
-      return this._identityEmails;
+  _getIdentityEmails() {
+    if (this._identityEmailsPromise) {
+      return this._identityEmailsPromise;
     }
 
-    /**
-     * @type {Map<string, string>}
-     */
-    let emails = new Map();
-    let accounts = await browser.accounts.list().catch((ex) => {
-      console.error(ex);
-      return [];
-    });
-    for (let account of accounts) {
-      if (account.type == "nntp") {
-        continue;
-      }
-
-      for (let identity of account.identities) {
-        let idEmail = /** @type {string} */ (
-          identity.email.toLocaleLowerCase()
-        );
-        // The default identity for the account is returned first, so
-        // if subsequent identites have the same email, then skip them.
-        if (!emails.has(idEmail)) {
-          emails.set(idEmail, /** @type {string} */ (identity.id));
+    this._identityEmailsPromise = browser.accounts
+      .list()
+      .catch((ex) => {
+        console.error(ex);
+        return [];
+      })
+      .then((accounts) => {
+        /**
+         * @type {Map<string, string>}
+         */
+        let emails = new Map();
+        for (let account of accounts) {
+          if (account.type == "nntp") {
+            continue;
+          }
+          for (let identity of account.identities) {
+            let idEmail = /** @type {string} */ (
+              identity.email.toLocaleLowerCase()
+            );
+            // The default identity for the account is returned first, so
+            // if subsequent identites have the same email, then skip them.
+            if (!emails.has(idEmail)) {
+              emails.set(idEmail, /** @type {string} */ (identity.id));
+            }
+          }
         }
-      }
-    }
-    this._identityEmails = emails;
-    return emails;
+        return emails;
+      });
+    return this._identityEmailsPromise;
   }
 
   /**
