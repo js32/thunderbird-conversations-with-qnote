@@ -98,20 +98,16 @@ export async function mergeContactDetails(msgData) {
             payload: contact,
           });
         });
-        contactMap.set(
-          contact.email,
-          // This is designed to not await on the request. However, in the
-          // Thunderbird betas around TB 90 / 91, performing multiple requests
-          // at the same time would break if an LDAP address book is loaded due
-          // to https://bugzilla.mozilla.org/show_bug.cgi?id=1716861
-          //
-          // Once that is fixed, we should investigate making these happen
-          // in parallel again. The performance impact probably isn't massive,
-          // but did seem to be more stable.
-          await promise
-        );
+        contactMap.set(contact.email, promise);
       }
     }
+  }
+
+  // Resolve all contact lookups in parallel (TB 90/91 LDAP bug fixed since TB 140+)
+  const emails = [...contactMap.keys()];
+  const resolved = await Promise.all([...contactMap.values()]);
+  for (let i = 0; i < emails.length; i++) {
+    contactMap.set(emails[i], resolved[i]);
   }
 
   port.onMessage.removeListener(receiveContact);

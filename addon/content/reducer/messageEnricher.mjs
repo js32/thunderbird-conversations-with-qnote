@@ -82,6 +82,8 @@ export class MessageEnricher {
 
     const userTags = await browser.messages.tags.list();
 
+    const folderNameCache = new Map(); // folder.id -> Promise<string>
+
     let msgs = await Promise.all(
       msgData.map(async (message) => {
         /** @type {FullMessageDetails} */
@@ -91,43 +93,30 @@ export class MessageEnricher {
             summary.tabId,
             message,
             userTags,
-            selectedMessages
+            selectedMessages,
+            folderNameCache
           );
 
-          if (message.getFullRequired) {
-            await this._getFullDetails(message, msg);
-          } else {
-            await this._addDetailsFromAttachments(
-              message,
-              msg,
-              summary.prefs.extraAttachments
-            );
-          }
-
-          // Try to get QNote data if available (for ALL messages)
-          try {
-            console.log(
-              "QNote: Attempting to get note for message ID:",
-              message.id
-            );
-            const qnoteText = await browser.conversations.getQNoteForMessage(
-              message.id
-            );
-            console.log(
-              "QNote: Got result:",
-              qnoteText ? "Note found" : "No note"
-            );
-            if (qnoteText) {
-              msg.qnote = qnoteText;
-              console.log("QNote: Set msg.qnote to:", qnoteText);
-            }
-          } catch (e) {
-            // QNote not available or not installed, silently continue
-            console.error("QNote: Error in messageEnricher:", e);
-          }
+          await Promise.all([
+            message.getFullRequired
+              ? this._getFullDetails(message, msg)
+              : this._addDetailsFromAttachments(
+                  message,
+                  msg,
+                  summary.prefs.extraAttachments
+                ),
+            browser.conversations
+              .getQNoteForMessage(message.id)
+              .then((t) => {
+                if (t) {
+                  msg.qnote = t;
+                }
+              })
+              .catch((e) => console.error("QNote: Error in messageEnricher:", e)),
+            this._setDates(msg, summary),
+          ]);
 
           this._adjustSnippetForBugzilla(message, msg);
-          await this._setDates(msg, summary);
         } catch (ex) {
           console.error("Could not process message:", ex);
           msg.invalid = true;
@@ -365,8 +354,10 @@ export class MessageEnricher {
    *   An array of the current tags the user has defined in Thunderbird.
    * @param {number[]} selectedMessages
    *   An array of the currently selected messages.
+   * @param {Map} folderNameCache
+   *   A cache of folder id to resolved folder name promises.
    */
-  async _addDetailsFromHeader(tabId, message, userTags, selectedMessages) {
+  async _addDetailsFromHeader(tabId, message, userTags, selectedMessages, folderNameCache) {
     // TODO: Maybe only clone msg & start using more fields directly.
     /** @type {FullMessageDetails} */
     let msg = {
@@ -381,21 +372,23 @@ export class MessageEnricher {
     };
     const messageFolderType = message.folder.type;
 
-    await this._parseContactLines(
-      {
-        from: message.author,
-        to: message.recipients,
-        cc: message.ccList,
-        bcc: message.bccList,
-        alternativeSender: message.alternativeSender,
-      },
-      msg
-    );
-    if (message.realFrom) {
-      let real = await browser.messengerUtilities.parseMailboxString(
-        message.realFrom
-      );
-      msg.realFrom = real?.[0].email;
+    const [, realFromParsed] = await Promise.all([
+      this._parseContactLines(
+        {
+          from: message.author,
+          to: message.recipients,
+          cc: message.ccList,
+          bcc: message.bccList,
+          alternativeSender: message.alternativeSender,
+        },
+        msg
+      ),
+      message.realFrom
+        ? browser.messengerUtilities.parseMailboxString(message.realFrom)
+        : Promise.resolve(null),
+    ]);
+    if (realFromParsed) {
+      msg.realFrom = realFromParsed[0]?.email;
     }
 
     msg.rawDate = message.date.getTime();
@@ -445,14 +438,19 @@ export class MessageEnricher {
       }
     }
 
-    let parentFolders = await browser.folders.getParentFolders(
-      message.folder.id
-    );
-    let folderName = message.folder.name;
-    for (let folder of parentFolders) {
-      folderName = folder.name + "/" + folderName;
+    if (!folderNameCache.has(message.folder.id)) {
+      folderNameCache.set(
+        message.folder.id,
+        browser.folders.getParentFolders(message.folder.id).then((parents) => {
+          let name = message.folder.name;
+          for (let folder of parents) {
+            name = folder.name + "/" + name;
+          }
+          return name;
+        })
+      );
     }
-    msg.folderName = folderName;
+    msg.folderName = await folderNameCache.get(message.folder.id);
     msg.shortFolderName = message.folder.name;
 
     return msg;
@@ -565,10 +563,37 @@ export class MessageEnricher {
    *   The new message to put the details into.
    */
   async _parseContactLines(contactData, msg) {
+    async function parseAll(items) {
+      if (!items?.length) {
+        return [];
+      }
+      const parts = await Promise.all(
+        items.map((i) =>
+          i
+            ? browser.messengerUtilities.parseMailboxString(i)
+            : Promise.resolve([])
+        )
+      );
+      return parts.flat();
+    }
+
+    const [fromParsed, toParsed, ccParsed, bccParsed, altParsed] =
+      await Promise.all([
+        contactData.from
+          ? browser.messengerUtilities.parseMailboxString(contactData.from)
+          : Promise.resolve([]),
+        parseAll(contactData.to),
+        parseAll(contactData.cc),
+        parseAll(contactData.bcc),
+        parseAll(contactData.alternativeSender),
+      ]);
+
     msg.parsedLines = {
-      from: contactData.from
-        ? await browser.messengerUtilities.parseMailboxString(contactData.from)
-        : [],
+      from: fromParsed,
+      to: toParsed,
+      cc: ccParsed,
+      bcc: bccParsed,
+      alternativeSender: altParsed,
     };
 
     // TODO: Drop realFrom, and use alternativeSender in the UI where
@@ -576,20 +601,6 @@ export class MessageEnricher {
     // The from can be overridden, e.g. in the case of bugzilla, so this field
     // is always the email address this was originally from.
     msg.realFrom = msg.parsedLines.from[0]?.email;
-
-    for (let line of ["to", "cc", "bcc", "alternativeSender"]) {
-      msg.parsedLines[line] = [];
-      let item = contactData[line];
-      if (!item?.length) {
-        continue;
-      }
-      for (let i of item) {
-        let data = i
-          ? await browser.messengerUtilities.parseMailboxString(i)
-          : [];
-        msg.parsedLines[line] = msg.parsedLines[line].concat(data);
-      }
-    }
 
     if (msg.parsedLines.alternativeSender?.length) {
       msg.parsedLines.from = msg.parsedLines.alternativeSender;
@@ -622,30 +633,21 @@ export class MessageEnricher {
     }
 
     let l = attachments.length;
-    let newAttachments = [];
 
-    for (let i = 0; i < l; i++) {
-      const att = attachments[i];
-      // This is bug 630011, remove when fixed
-      let formattedSize = this.sizeUnknownString;
-      // -1 means size unknown
-      if (att.size != -1) {
-        formattedSize = await browser.messengerUtilities.formatFileSize(
-          att.size
-        );
-      }
-
-      // We've got the right data, push it!
-      newAttachments.push({
+    // This is bug 630011, remove when fixed (-1 means size unknown)
+    msg.attachments = await Promise.all(
+      attachments.map(async (att, i) => ({
         size: att.size,
         contentType: att.contentType,
-        formattedSize,
+        formattedSize:
+          att.size != -1
+            ? await browser.messengerUtilities.formatFileSize(att.size)
+            : this.sizeUnknownString,
         name: att.name,
         partName: att.partName,
         anchor: "msg" + initialPosition + "att" + i,
-      });
-    }
-    msg.attachments = newAttachments;
+      }))
+    );
     msg.attachmentsPlural = l
       ? await browser.conversations.makePlural(
           this.pluralForm,
