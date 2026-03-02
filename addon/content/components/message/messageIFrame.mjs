@@ -486,6 +486,9 @@ export class MessageIFrame extends React.Component {
       "body:has(> .moz-text-html) {",
       "  color: " + fg + "; background-color: " + bg + ";",
       "}",
+      ".moz-text-html {",
+      "  padding: 15px;",
+      "}",
     ]);
 
     return styleRules;
