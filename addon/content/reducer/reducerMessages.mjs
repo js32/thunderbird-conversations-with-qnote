@@ -125,6 +125,11 @@ export const messageActions = {
       browser.conversations.openInSourceView(id).catch(console.error);
     };
   },
+  printMessage({ id }) {
+    return async () => {
+      browser.conversations.printMessage(id).catch(console.error);
+    };
+  },
   setTags({ id, tags }) {
     return async () => {
       browser.messages

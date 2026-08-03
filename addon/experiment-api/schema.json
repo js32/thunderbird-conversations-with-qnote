@@ -196,6 +196,19 @@
         ]
       },
       {
+        "name": "printMessage",
+        "type": "function",
+        "description": "Opens a message in a standalone window and prints it.",
+        "async": true,
+        "parameters": [
+          {
+            "name": "id",
+            "type": "integer",
+            "description": "The message id to print."
+          }
+        ]
+      },
+      {
         "name": "showRemoteContent",
         "type": "function",
         "description": "Enables showing remote content for a particular message.",

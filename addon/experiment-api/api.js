@@ -459,6 +459,49 @@ var conversations = class extends ExtensionCommon.ExtensionAPI {
             { URL: url }
           );
         },
+        async printMessage(id) {
+          const win = Services.wm.getMostRecentWindow("mail:3pane");
+          const msgHdr = context.extension.messageManager.get(id);
+          if (!msgHdr) {
+            throw new Error("Could not find message");
+          }
+          // Printing needs the message rendered in a browser. Rather than
+          // printing whatever the conversation view currently shows, open a
+          // standalone message window for this message and let Thunderbird
+          // print it -- that matches what the classic view would produce.
+          let msgWin = win.openDialog(
+            "chrome://messenger/content/messageWindow.xhtml",
+            "_blank",
+            "all,chrome,dialog=no,status,toolbar",
+            msgHdr
+          );
+          // The message is rendered asynchronously inside the window's
+          // <browser id="messageBrowser">, which fires MsgLoaded once the
+          // message pane actually holds the message. Printing any earlier
+          // would produce an empty document.
+          msgWin.addEventListener(
+            "DOMContentLoaded",
+            () => {
+              let messageBrowser =
+                msgWin.document.getElementById("messageBrowser");
+              messageBrowser.addEventListener(
+                "MsgLoaded",
+                () => {
+                  // Same call the built-in "Print" command uses, see
+                  // aboutMessage.js's cmd_print callback.
+                  let aboutMessage = messageBrowser.contentWindow;
+                  msgWin.PrintUtils.startPrintWindow(
+                    aboutMessage.document.getElementById("messagepane")
+                      .browsingContext,
+                    {}
+                  );
+                },
+                { once: true }
+              );
+            },
+            { once: true }
+          );
+        },
         async showRemoteContent(id) {
           const msgHdr = context.extension.messageManager.get(id);
           msgHdr.setUint32Property("remoteContentPolicy", kAllowRemoteContent);

@@ -45,6 +45,10 @@ const ActionsToInfoMap = {
     title: "action.viewSource",
     icon: "code",
   },
+  print: {
+    title: "action.print",
+    icon: "print",
+  },
   deleteAttachment: {
     title: "attachments.context.delete",
     icon: "delete_forever",

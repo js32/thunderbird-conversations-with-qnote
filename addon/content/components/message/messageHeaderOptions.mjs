@@ -101,6 +101,16 @@ export function OptionsMoreMenu({
       ),
       React.createElement(
         "li",
+        { className: "action-print dropdown-sep" },
+        React.createElement(ActionButton, {
+          callback: msgSendAction,
+          className: "optionsButton",
+          showString: true,
+          type: "print",
+        })
+      ),
+      React.createElement(
+        "li",
         { className: "action-classic" },
         React.createElement(ActionButton, {
           callback: msgSendAction,
@@ -187,6 +197,9 @@ export function MessageHeaderOptions({
         break;
       case "source":
         action = messageActions.openSource(payload);
+        break;
+      case "print":
+        action = messageActions.printMessage(payload);
         break;
       default:
         console.error("Don't know how to create an action for", msg);

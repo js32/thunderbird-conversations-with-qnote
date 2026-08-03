@@ -369,6 +369,11 @@
     "description": "Delete button name in the message more menu"
   },
 
+  "action.print": {
+    "message": "print message",
+    "description": "Print button name in the message more menu"
+  },
+
   "action.viewClassic": {
     "message": "view using the classic reader",
     "description": "Show in classic view button name in the message more menu"

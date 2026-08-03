@@ -167,6 +167,7 @@ declare namespace browser {
     ): Promise<void>;
     export function sendUnsent(): Promise<void>;
     export function openInSourceView(id: number): Promise<void>;
+    export function printMessage(id: number): Promise<void>;
     export function showRemoteContent(id: number): Promise<void>;
     export function alwaysShowRemoteContent(email: string): Promise<void>;
     export function beginEdit(id: number): Promise<void>;

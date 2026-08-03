@@ -227,6 +227,10 @@
     "message": "Nachricht löschen",
     "description": "Delete button name in the message more menu"
   },
+  "action.print": {
+    "message": "Nachricht drucken",
+    "description": "Print button name in the message more menu"
+  },
   "action.viewClassic": {
     "message": "Klassische Ansicht",
     "description": "Show in classic view button name in the message more menu"
